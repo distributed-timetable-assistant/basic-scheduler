@@ -73,7 +73,7 @@ jobs:
           token: ${{ secrets.GIT_TOKEN }}
       - run: |
           sed -i "/^ *- name: ${{ vars.DOCKERHUB_USERNAME }}\/${{ vars.ORG_NAME }}\.${{ vars.PROJECT_NAME }} *$/,/^ *newTag: .*/ s/\(newTag: \).*/\1${{ needs.package.outputs.image-tag }}/g" \
-            ${{ vars.PROJECT_NAME }}/overlays/dev/kustomization.yaml
+            ${{ vars.PROJECT_NAME }}/overlays/stage/kustomization.yaml
       - name: Git config
         run: |
           git config --global user.name "${{ vars.GIT_USER_NAME }}"

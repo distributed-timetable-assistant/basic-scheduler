@@ -8,3 +8,77 @@ jobs:
   common:
     uses: ./.github/workflows/common.yml
     secrets: inherit
+
+  build:
+    runs-on: ubuntu-latest
+    needs:
+      - common
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: rustup update nightly && rustup default nightly
+      - run: rustup target add x86_64-unknown-linux-musl
+      - run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: Upload binary result
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary_result
+          path: target/x86_64-unknown-linux-musl/release/${{ env.PROJECT_NAME }}
+          retention-days: 1
+
+  package:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            Dockerfile
+      - name: Download binary result
+        uses: actions/download-artifact@v4
+        with:
+          name: binary_result
+          path: target/x86_64-unknown-linux-musl/release/
+      - run: chmod +x target/x86_64-unknown-linux-musl/release/${{ env.PROJECT_NAME }}
+      - name: Login to the container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: "${{ env.DOCKERHUB_USERNAME }}/${{ env.ORG_NAME }}.${{ env.PROJECT_NAME }}"
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - package
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: "${{ github.repository_owner }}/${{ env.GITOPS_PROJECT_NAME }}"
+          token: ${{ secrets.GIT_TOKEN }}
+      - run: |
+          sed -i "/^ *- name: ${{ secrets.DOCKERHUB_USERNAME }}\/${{ env.ORG_NAME }}\.${{ env.PROJECT_NAME }} *$/,/^ *newTag: .*/ s/\(newTag: \).*/\1${{ needs.package.outputs.image-tag }}/g" \
+            ${{ env.PROJECT_NAME }}/overlays/dev/kustomization.yaml
+      - name: Git config
+        run: |
+          git config --global user.name "${{ env.GIT_USER_NAME }}"
+          git config --global user.email "${{ env.GIT_USER_EMAIL }}"
+      - name: Git commit
+        run: |
+          git commit -am "ci(${{ env.PROJECT_NAME }}): update image with tag=(${{ needs.package.outputs.image-tag }})" || true
+      - run: git push origin

@@ -1,8 +1,9 @@
 use std::env;
+
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
 
-static DEFAULT_YAML: &str = include_str!("../../../config/default.yml");
+static DEFAULT_YAML: &str = include_str!("../../../config/application.yml");
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
@@ -24,12 +25,13 @@ impl AppConfig {
         let env = env::var("APP_ENV").unwrap_or_else(|_| "dev".into());
         let cwd = env::current_dir().expect(GET_CWD_ERR);
 
-        let mut config_builder = Config::builder().add_source(File::from_str(DEFAULT_YAML, FileFormat::Yaml));
+        let mut config_builder =
+            Config::builder().add_source(File::from_str(DEFAULT_YAML, FileFormat::Yaml));
 
         let conf_paths = vec![
-            (cwd.join("../../config/default.yml"), false),
-            (cwd.join(&format!("config/{}.yml", env)), false),
-            (cwd.join("../../config/local.yml"), false),
+            (cwd.join("config/application.yml"), false),
+            (cwd.join(format!("config/application-{}.yml", env)), false),
+            (cwd.join("config/application-local.yml"), false),
             (cwd.join("/etc/basic-scheduler/config.yml"), false),
         ];
         for (config_path, required) in conf_paths {

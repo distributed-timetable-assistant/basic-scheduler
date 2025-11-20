@@ -1,4 +1,4 @@
-use crate::infrastructure::config::app_config::AppConfig;
+use crate::infrastructure::config::AppConfig;
 
 #[derive(Clone)]
 pub struct AppState {
